@@ -60,7 +60,7 @@ STUDENTS = [
     {"slug": "marcel-bytautas",      "display": "Marcel Bytautas"},
     {"slug": "gregor-czodrowski",    "display": "Gregor Czodrowski"},
     {"slug": "thomas-dammer",        "display": "Thomas Dammer"},
-    {"slug": "mathilde-doescher",    "display": "Mathilde Doescher"},
+    {"slug": "markus-doescher",      "display": "Markus Doescher"},
     {"slug": "lukas-kesting",        "display": "Lukas Kesting"},
     {"slug": "agaton-sandberg",      "display": "Agaton Sandberg"},
     {"slug": "thomas-schulz",        "display": "Thomas Schulz"},
