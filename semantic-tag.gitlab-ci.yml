@@ -1,0 +1,91 @@
+stages:
+  - tag
+
+# Semantic versioning tag based on conventional commits
+# NOTE: Requires either:
+#   1. CI_JOB_TOKEN with write permissions (Settings → CI/CD → Token Access → Allow Git push)
+#   2. Or PROJECT_ACCESS_TOKEN variable with write_repository scope
+semantic-tag:
+  stage: tag
+  image: bitnami/git:latest
+  variables:
+    CHECK_POM: "false"
+  before_script:
+    - 'git config --global user.email "ci@bcp.technology"'
+    - 'git config --global user.name "GitLab CI"'
+    - 'git remote add auth-origin https://oauth2:${GROUP_ACCESS_TOKEN}@gitlab.internal.bcp.technology/${CI_PROJECT_PATH}.git'
+  script:
+    - echo "Last commit message:"
+    - COMMIT_MSG=$(git log -1 --pretty=%B)
+    - echo "$COMMIT_MSG"
+    - git fetch --tags
+    - LAST_TAG=$(git tag -l 'v*' --sort=-version:refname | head -n 1)
+    - LAST_TAG=${LAST_TAG:-v0.0.0}
+    - echo "Last tag:$LAST_TAG"
+    - VERSION=${LAST_TAG#v}
+    - echo "Last version:$VERSION"
+    - MAJOR=$(echo "$VERSION" | cut -d. -f1)
+    - MINOR=$(echo "$VERSION" | cut -d. -f2)
+    - PATCH=$(echo "$VERSION" | cut -d. -f3)
+    - |
+      BUMP=""
+      
+      # 1. Priorität manuell gesetztes RELEASE-Flag
+      case "$RELEASE" in
+        major) BUMP="major" ;;
+        minor) BUMP="minor" ;;
+        patch) BUMP="patch" ;;
+      esac
+
+      # 2. Falls kein manuelles Override → Commit Message prüfen
+      if [ -z "$BUMP" ]; then
+        if echo "$COMMIT_MSG" | grep -q "BREAKING CHANGE"; then
+          BUMP="major"
+        elif echo "$COMMIT_MSG" | grep -q "^feat:"; then
+          BUMP="minor"
+        elif echo "$COMMIT_MSG" | grep -q "^fix:"; then
+          BUMP="patch"
+        fi
+      fi
+
+      # 3. Version erhöhen
+      case "$BUMP" in
+        major)
+          MAJOR=$((MAJOR + 1))
+          MINOR=0
+          PATCH=0
+          echo "Bumping MAJOR version"
+          ;;
+        minor)
+          MINOR=$((MINOR + 1))
+          PATCH=0
+          echo "Bumping MINOR version"
+          ;;
+        patch)
+          PATCH=$((PATCH + 1))
+          echo "Bumping PATCH version"
+          ;;
+        *)
+          echo "No version-increasing commits found, no tag will be created."
+          exit 0
+          ;;
+      esac
+    - NEW_TAG="v$MAJOR.$MINOR.$PATCH"
+    - echo "New Tag:$NEW_TAG"
+    - |
+      if [ "$CHECK_POM" = "true" ]; then
+        echo "Checking major versions in all pom.xml files..."
+        echo "NOTE: xmllint not available in this image - skipping pom.xml validation"
+        echo "Set CHECK_POM=false or use a Java-specific tagging job"
+      else
+        echo "Skipping pom.xml check (CHECK_POM=$CHECK_POM)"
+      fi
+    - git tag -a "$NEW_TAG" -m "Release $NEW_TAG"
+    - git push auth-origin "$NEW_TAG"
+    - echo "Successfully created and pushed tag:$NEW_TAG"
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: on_success
+    - if: $RELEASE == "fix" || $RELEASE == "feat" || $RELEASE == "breaking"
+      when: on_success
+  allow_failure: false
